@@ -1,6 +1,6 @@
+#FINI - 3 points
 # Cours hippique
 # Version de Girardin Mathis et Thomas Alexis
-# Version très basique, sans mutex sur l'écran, sans arbitre, sans annoncer le gagant, ... ...
 
 from multiprocessing import Pipe
 from threading import Lock
