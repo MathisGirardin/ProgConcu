@@ -10,6 +10,6 @@
 |        Quick-sort - Sujet 1        	|           5          	|    - [ ]    	|
 |   Système de contrôles - Sujet 2   	|           4          	|    - [ ]    	|
 |  Déplacements de robots - Sujet 2  	|           5          	|    - [ ]    	|
-|  Gestion d'un restaurant - Sujet 2 	|           5          	|    - [ ]    	|
-|       Game of Life - Sujet 2       	|           5          	|    - [ ]   	|
+|  Gestion d'un restaurant - Sujet 2 	|           5          	|   - [x]    	|
+|       Game of Life - Sujet 2       	|           5          	|   - [x]   	|
 | Dessin de la Fractale de Mandelbro 	|           3          	|    - [ ]   	|

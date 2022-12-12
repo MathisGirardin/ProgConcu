@@ -1,7 +1,6 @@
 # Restaurant
 # Version de Girardin Mathis et Thomas Alexis
-
-from multiprocessing import Pipe, SimpleQueue
+from multiprocessing import Pipe, Queue
 from threading import Lock
 
 import multiprocessing as mp
@@ -18,68 +17,71 @@ GOTOYX   = "\x1B[%.2d;%.2dH"       #  ('H' ou 'f') : Goto at (y,x), voir le code
 DELAFCURSOR = "\x1B[K"             #  effacer après la position du curseur
 CRLF  = "\r\n"                     #  Retour à la ligne
 
-# VT100 : Actions sur le curseur
-CURSON   = "\x1B[?25h"             #  Curseur visible
-CURSOFF  = "\x1B[?25l"             #  Curseur invisible
-
-# VT100 : Actions sur les caractères affichables
-NORMAL = "\x1B[0m"                  #  Normal
-BOLD = "\x1B[1m"                    #  Gras
-UNDERLINE = "\x1B[4m"               #  Souligné
-
 def effacer_ecran() : print(CLEARSCR,end = '')
 def erase_line_from_beg_to_curs() : print("\033[1K",end='')
 def erase_line() : print("\033[K",end='')
-def curseur_invisible() : print(CURSOFF,end='')
-def curseur_visible() : print(CURSON,end='')
 def move_to(lig, col) : print("\033[" + str(lig) + ";" + str(col) + "f",end='')
 
 def en_couleur(Coul) : print(Coul,end='')
  
 NB_SERVEUR = 5
-WORKTIME = 1
+WORKTIME = 10
 TIME_TO_COOK = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26]
 
-traitementCommandeEnCours = SimpleQueue()
+TableauCommande = Queue(maxsize = 50)
+traitementCommandeEnCours = Queue()
 
 #----------------------------------------------------------------
-def serveur(idServeur, TableauCommande : SimpleQueue, serveurToMajordome):
+def serveur(idServeur, toMajordome):
+    traitementCommandeEnCours.put("A")
+    toMajordome.send(idServeur + "()A")
     while True :
-        if not TableauCommande.empty():
-            traitementCommandeEnCours.put(True)
-            #Prise en charge de la commande
-            commande = str(TableauCommande.get())
+        #Prise en charge de la commande
+        commande = str(TableauCommande.get())
+        toMajordome.send("TC")
 
-            serveurToMajordome.send(idServeur + commande + "R")
+        traitementCommandeEnCours.put("R")
+        traitementCommandeEnCours.put("P")
+        toMajordome.send(idServeur + commande + "R")
 
-            #Transfert à la cuisine
-            indTTS = ord(commande[commande.index(',') + 1 : commande.index(')')]) - 65
-            time.sleep(TIME_TO_COOK[indTTS])
+        #Transfert à la cuisine
+        indTTS = ord(commande[commande.index(',') + 1 : commande.index(')')]) - 65
+        time.sleep(TIME_TO_COOK[indTTS])
 
-            serveurToMajordome.send(idServeur + commande + "P")
-            traitementCommandeEnCours.get()
+        toMajordome.send(idServeur + commande + "P")
 
-def clients(TableauCommande : SimpleQueue):
+def clients(toMajordome):
     while True :
         TableauCommande.put("({},{})".format(random.randint(1,10), chr(65 + random.randint(0,25))))
-        time.sleep(random.randint(3,10))
+        toMajordome.send("TC")
+        time.sleep(random.randint(2,5))
 
 def majordome(majordomeRecv):
     while True :
         data = str(majordomeRecv.recv())
-        line = int(data[0 : data.index("(")])
-        text = "Le serveur " + str(line) + " "
-        if data[data.index(")") + 1] == "R":
-            text = text + "s'occupe de la commande "
-        elif data[data.index(")") + 1] == "P":
-            text = text + "a servi la commande "
-        text = text + data[data.index("(") : data.index(")") + 1]
-        move_to(line, 0)
-        erase_line()
-        print(text)
+        if data == "TC":
+            move_to(NB_SERVEUR + 2, 0)
+            erase_line()
+            print("Nombre de commandes en attente: " + str(TableauCommande.qsize()))
+        else:
+            line = int(data[0 : data.index("(")])
+            text = "Le serveur " + str(line) + " "
+            if data[data.index(")") + 1] == "R":
+                text = text + "s'occupe de la commande "
+                text = text + data[data.index("(") : data.index(")") + 1]
+            elif data[data.index(")") + 1] == "P":
+                text = text + "a servi la commande "
+                text = text + data[data.index("(") : data.index(")") + 1]
+            elif data[data.index(")") + 1] == "A":
+                text = text + "attend une commande"
+            
+            move_to(line, 0)
+            erase_line()
+            print(text)
+            traitementCommandeEnCours.get()
 
-def ouverture_restaurant(ProcessList : list, TableauCommande : SimpleQueue):
-    majordomeRecv, serveurToMajordome = Pipe()
+def ouverture_restaurant(ProcessList : list):
+    majordomeRecv, toMajordome = Pipe()
 
     #Arrivée des employés
     #Majordome
@@ -89,7 +91,7 @@ def ouverture_restaurant(ProcessList : list, TableauCommande : SimpleQueue):
 
     #Esclaves
     for i in range(NB_SERVEUR):
-        process = mp.Process(target = serveur, args = (str(i + 1), TableauCommande, serveurToMajordome))
+        process = mp.Process(target = serveur, args = (str(i + 1), toMajordome))
         process.start()
         ProcessList.append(process)
 
@@ -98,11 +100,11 @@ def ouverture_restaurant(ProcessList : list, TableauCommande : SimpleQueue):
     print("Ouvert")
 
     #Arrivée des clients
-    process = mp.Process(target = clients, args = (TableauCommande,))
+    process = mp.Process(target = clients, args = (toMajordome,))
     process.start()
     ProcessList.append(process)
 
-def fermeture_restaurant(ProcessList : list, TableauCommande : SimpleQueue):
+def fermeture_restaurant(ProcessList : list):
     #Fin des commandes
     ProcessList[ProcessList.__len__() - 1].terminate()
     move_to(NB_SERVEUR + 3, 0)
@@ -112,12 +114,9 @@ def fermeture_restaurant(ProcessList : list, TableauCommande : SimpleQueue):
     #Arrêt du service
     while not TableauCommande.empty():
         continue
+    time.sleep(0.001)
     while not traitementCommandeEnCours.empty():
-        print("n",end='')
-        time.sleep(1)
         continue
-
-    print("OKKKKKKKKK")
 
     #Départ du majordome et des serveurs
     for i in range(0, NB_SERVEUR + 1):
@@ -133,14 +132,14 @@ if __name__ == "__main__" :
     if platform.system() == "Darwin" :
         mp.set_start_method('fork') # Nécessaire sous macos, OK pour Linux (voir le fichier des sujet
 
-    ProcessList = []
-    TableauCommande = SimpleQueue()
-
     while True :
-        ouverture_restaurant(ProcessList, TableauCommande)
+        ProcessList = []
+        ouverture_restaurant(ProcessList)
         for i in range(WORKTIME):
-            time.sleep(10)
-        fermeture_restaurant(ProcessList, TableauCommande)
+            time.sleep(5)
+        fermeture_restaurant(ProcessList)
         for i in range(WORKTIME):
-            time.sleep(10)
+            time.sleep(1)
+        TableauCommande = Queue(maxsize = 50)
+        traitementCommandeEnCours = Queue()
 
