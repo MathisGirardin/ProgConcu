@@ -25,29 +25,27 @@ def move_to(lig, col) : print("\033[" + str(lig) + ";" + str(col) + "f",end='')
 def en_couleur(Coul) : print(Coul,end='')
  
 NB_SERVEUR = 5
-WORKTIME = 10
-TIME_TO_COOK = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26]
+WORKTIME = 10 #Unité de temps
+TIME_TO_COOK = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26] #En seconde
 
 TableauCommande = Queue(maxsize = 50)
 traitementCommandeEnCours = Queue()
 
 #----------------------------------------------------------------
 def serveur(idServeur, toMajordome):
-    traitementCommandeEnCours.put("A")
     toMajordome.send(idServeur + "()A")
     while True :
         #Prise en charge de la commande
         commande = str(TableauCommande.get())
-        toMajordome.send("TC")
-
-        traitementCommandeEnCours.put("R")
-        traitementCommandeEnCours.put("P")
+        traitementCommandeEnCours.put(None)
+        toMajordome.send("TC") #Update Tableau Commande
         toMajordome.send(idServeur + commande + "R")
 
         #Transfert à la cuisine
         indTTS = ord(commande[commande.index(',') + 1 : commande.index(')')]) - 65
         time.sleep(TIME_TO_COOK[indTTS])
 
+        #Commande servie
         toMajordome.send(idServeur + commande + "P")
 
 def clients(toMajordome):
@@ -59,26 +57,27 @@ def clients(toMajordome):
 def majordome(majordomeRecv):
     while True :
         data = str(majordomeRecv.recv())
-        if data == "TC":
+        if data == "TC": #Update du TableauCommande
             move_to(NB_SERVEUR + 2, 0)
             erase_line()
             print("Nombre de commandes en attente: " + str(TableauCommande.qsize()))
-        else:
+        else: #Message du serveur
             line = int(data[0 : data.index("(")])
             text = "Le serveur " + str(line) + " "
-            if data[data.index(")") + 1] == "R":
+            if data[data.index(")") + 1] == "R": # Réception de la commande (X,Y)
                 text = text + "s'occupe de la commande "
                 text = text + data[data.index("(") : data.index(")") + 1]
-            elif data[data.index(")") + 1] == "P":
+            elif data[data.index(")") + 1] == "P": # La commande (X,Y) est servi
                 text = text + "a servi la commande "
                 text = text + data[data.index("(") : data.index(")") + 1]
-            elif data[data.index(")") + 1] == "A":
+            elif data[data.index(")") + 1] == "A": # Le serveur attend
                 text = text + "attend une commande"
             
             move_to(line, 0)
             erase_line()
             print(text)
-            traitementCommandeEnCours.get()
+            if data[data.index(")") + 1] == "P":
+                traitementCommandeEnCours.get()
 
 def ouverture_restaurant(ProcessList : list):
     majordomeRecv, toMajordome = Pipe()
@@ -89,7 +88,7 @@ def ouverture_restaurant(ProcessList : list):
     process.start()
     ProcessList.append(process)
 
-    #Esclaves
+    #Esclaves (ou serveurs)
     for i in range(NB_SERVEUR):
         process = mp.Process(target = serveur, args = (str(i + 1), toMajordome))
         process.start()
@@ -132,7 +131,7 @@ if __name__ == "__main__" :
     if platform.system() == "Darwin" :
         mp.set_start_method('fork') # Nécessaire sous macos, OK pour Linux (voir le fichier des sujet
 
-    while True :
+    while True : #Répétition quotidienne de l'ouverture du restaurant
         ProcessList = []
         ouverture_restaurant(ProcessList)
         for i in range(WORKTIME):

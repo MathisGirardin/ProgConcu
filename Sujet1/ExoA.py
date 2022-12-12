@@ -25,11 +25,6 @@ CRLF  = "\r\n"                     #  Retour à la ligne
 CURSON   = "\x1B[?25h"             #  Curseur visible
 CURSOFF  = "\x1B[?25l"             #  Curseur invisible
 
-# VT100 : Actions sur les caractères affichables
-NORMAL = "\x1B[0m"                  #  Normal
-BOLD = "\x1B[1m"                    #  Gras
-UNDERLINE = "\x1B[4m"               #  Souligné
-
 # VT100 : Couleurs : "22" pour normal intensity
 CL_BLACK="\033[22;30m"                  #  Noir. NE PAS UTILISER. On verra rien !!
 CL_RED="\033[22;31m"                    #  Rouge
@@ -55,12 +50,12 @@ lyst_colors=[CL_WHITE, CL_RED, CL_GREEN, CL_BROWN , CL_BLUE, CL_MAGENTA, CL_CYAN
              CL_DARKGRAY, CL_LIGHTRED, CL_LIGHTGREEN,  CL_LIGHTBLU, CL_YELLOW, CL_LIGHTMAGENTA, CL_LIGHTCYAN]
 
 HORSE_SIZE = 4 
-LONGEUR_COURSE = 150 # Tout le monde aura la même copie (donc no need to have a 'value')
-NB_PROCESS = 10
+LONGEUR_COURSE = 150
+NB_PROCESS = 10 #Nombre de chevaux
 mutex = Lock()
 resultat = [0 for i in range(NB_PROCESS)]
 
-
+# Fonctions d'affichage
 def effacer_ecran() : print(CLEARSCR,end = '')
 def erase_line_from_beg_to_curs() : print("\033[1K",end='')
 def erase_line() : print("\033[K",end='')
@@ -71,8 +66,9 @@ def move_to(lig, col) : print("\033[" + str(lig) + ";" + str(col) + "f",end='')
 def en_couleur(Coul) : print(Coul,end='')
 def en_rouge() : print(CL_RED,end='') # Un exemple !
 
+# Affichage d'une ligne du cheval
 def write_cheval(ma_ligne, col):
-    move_to(ma_ligne + 1,col)         # pour effacer toute ma ligne
+    move_to(ma_ligne + 1,col)
     erase_line_from_beg_to_curs()
     if ma_ligne%HORSE_SIZE == 0:
         print("    __")
@@ -87,6 +83,7 @@ def write_cheval(ma_ligne, col):
 def un_cheval(ma_ligne : int, keep_running, sender) : # ma_ligne commence à 0
     col=1
     while col < LONGEUR_COURSE and keep_running.value :
+        #Affiche toutes les lignes du cheval
         mutex.acquire(True)
         en_couleur(lyst_colors[ma_ligne%len(lyst_colors)])
         write_cheval(ma_ligne * HORSE_SIZE, col)
@@ -104,24 +101,25 @@ def un_cheval(ma_ligne : int, keep_running, sender) : # ma_ligne commence à 0
 # La tache de l'arbitre
 def arbitre(keep_running, recv, guess):
     score = [0 for i in range(NB_PROCESS)]
-    gagnant = 0
-    perdant = 0
-    position = 1
+    gagnant = 0 #Gagnant de la course
+    perdant = 0 #Perdant de la course
+    position = 1 
     while keep_running.value:
-        indice = recv.recv()
-        score[indice] = score[indice] + 1
-        if score[indice] == LONGEUR_COURSE - 1:
+        indice = recv.recv() #Canarsson qui s'est déplacé
+        score[indice] = score[indice] + 1 #Le canarsson avance de 1
+        if score[indice] == LONGEUR_COURSE - 1: #Le canarsson est arrivé on détermine sa position
             resultat[indice] = position
             position = position + 1
             continu = False
-        for i in range(NB_PROCESS):
+        for i in range(NB_PROCESS): #Changement gagnant et perdant
             if score[i] > score[gagnant]:
                 gagnant = i
             if score[i] <= score[perdant]:
                 perdant = i
-            if resultat[i] == 0:
+            if resultat[i] == 0: #Est-ce que tous le monde est arrivé ?
                 continu = True
             
+        #MAJ affichage
         mutex.acquire(True)
         en_rouge()
         move_to(NB_PROCESS * HORSE_SIZE + 2, 1)
@@ -130,7 +128,7 @@ def arbitre(keep_running, recv, guess):
         move_to(NB_PROCESS * HORSE_SIZE + 3, 1)
         erase_line()
         print("Le dernier c'est le canarsson " + (perdant + 1).__str__())
-        if not continu:
+        if not continu: #La course est terminé
             move_to(NB_PROCESS * HORSE_SIZE + 4, 1)
             print("Votre canarsson est arrivé en " + resultat[int(guess) - 1].__str__() + "ème position")
             erase_line()
@@ -149,12 +147,13 @@ def course_hippique(keep_running) :
     recv, sender = Pipe()
 
     effacer_ecran()
+    # Pari sur ton canarsson préféré pour voir la course
     print("Héé !! Toi là !!! Viens me dire qui sera l'heureux gagnant de la course du MI-LE-NAIREEEEEE !!!? Cé le canarsson (1 - "+ NB_PROCESS.__str__() +"):")
     guess = input()
     effacer_ecran()
     curseur_invisible()
     
-    for i in range(NB_PROCESS):  # Lancer     Nb_process  processus
+    for i in range(NB_PROCESS):  # Lancer NB_PROCESS processus un_cheval
         mes_process[i] = mp.Process(target = un_cheval, args = (i,keep_running,sender))
         mes_process[i].start()
 
@@ -162,6 +161,7 @@ def course_hippique(keep_running) :
     en_rouge()
     print("Hééééééé cé patiiiiiii !!!")
 
+    #Arrivé de l'arbitre
     monarbitre = mp.Process(target = arbitre, args = (keep_running,recv,guess))
     monarbitre.start()
     
