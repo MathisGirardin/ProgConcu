@@ -4,7 +4,7 @@
 |:----------------------------------:	|:--------------------:	|:---------:	|
 |      Course Hippique - Sujet 1     	|           3          	|   - [x]   	|
 |    Faites des calculs - Sujet 1    	|         3 à 5        	|    - [ ]    	|
-|  Gestionnaire de billes - Sujet 1  	|           5          	|    - [ ]    	|
+|  Gestionnaire de billes - Sujet 1  	|           5          	|   - [x]    	|
 |     Estimation de Pi - Sujet 1     	|           3          	|   - [x]   	|
 |        Merge-sort - Sujet 1        	|           5          	|    - [ ]    	|
 |        Quick-sort - Sujet 1        	|           5          	|    - [ ]    	|
