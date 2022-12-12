@@ -1,4 +1,4 @@
-#PAS FINI (5 points)
+#FINI - 5 points
 
 from time import sleep
 import multiprocessing as mp
