@@ -1,9 +1,10 @@
+#FINI (5 points)
+
 
 # Quelques codes d'échappement (tous ne sont pas utilisés)
 import multiprocessing as mp
 from time import sleep
 import numpy as np
-
 
 CLEARSCR="\x1B[2J\x1B[;H"          #  Clear SCReen
 CLEAREOS = "\x1B[J"                #  Clear End Of Screen
@@ -22,6 +23,8 @@ def erase_line() : print("\033[K",end='')
 def curseur_invisible() : print(CURSOFF,end='')
 def curseur_visible() : print(CURSON,end='')
 def move_to(lig, col) : print("\033[" + str(lig) + ";" + str(col) + "f",end='')
+
+verrou=mp.Lock()
 
 def countNeighbourLive(line, col, tab, i, j):
     count = 0
@@ -44,25 +47,34 @@ def countNeighbourLive(line, col, tab, i, j):
     
     return count      
 
-def calcLine(line, col, tab, i):
-    tempTab = [0]*col
+def calcLine(line, col, tab, i, tableau_partage):
     for j in range(0, col): 
         voisinsVivants = countNeighbourLive(line, col, tab, i, j) 
         if tab[i][j] == 0:
             if voisinsVivants == 3:
-                tempTab[j] = 1
+                verrou.acquire()
+                tableau_partage[i*col + j] = 1
+                verrou.release()
         else:
             if voisinsVivants == 2 or voisinsVivants == 3:
-                tempTab[j] = 1
-    return tempTab
+                verrou.acquire()
+                tableau_partage[i*col + j] = 1
+                verrou.release()
     
 def getNextTab(line, col, tab):
     newTab = np.zeros((line, col))
+    tableau_partage = mp.Array('i', line * col)
+    tableau_partage[:]= [0 for _ in range(line*col)]
+
     listProcess = [0]*line
     for i in range (0, line):
-        listProcess[i] = mp.Process(target=calcLine, args=(line, col,tab, i,))
+        listProcess[i] = mp.Process(target=calcLine, args=(line, col,tab, i, tableau_partage))
         listProcess[i].start()
-        newTab[i] = calcLine(line, col, tab, i)
+    for i in range (0, line):
+        listProcess[i].join()
+    for i in range (0, line):
+        for j in range (0, col):
+            newTab[i][j] = tableau_partage[col*i + j]
     return newTab
                     
 
@@ -91,22 +103,20 @@ def gol(line, col, tab):
     while 1:
         showActualTab(line, col, tab)
         tab = getNextTab(line, col, tab)
-        sleep(0.2)
+        sleep(0.1)
 
-
-col = 39
-line = 9
-            
-pattern = np.array([[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0],
-                    [1,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [1,1,0,0,0,0,0,0,0,0,1,0,0,0,1,0,1,1,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                    [0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]])
+if __name__ == "__main__":
+    col = 39
+    line = 9
+    pattern = np.array([[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+                        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+                        [0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0],
+                        [0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0],
+                        [1,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+                        [1,1,0,0,0,0,0,0,0,0,1,0,0,0,1,0,1,1,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+                        [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+                        [0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+                        [0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]])
         
-print(pattern)
 
-gol(line, col, pattern)
+    gol(line, col, pattern)
